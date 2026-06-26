@@ -1,0 +1,1377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HD AI Chat - Multi-Model Chatbot</title>
+    <link rel="icon" type="image/png" href="/static/logo.png">
+    
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: #ffffff;
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .auth-screen {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .auth-box {
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 90%;
+            max-width: 400px;
+        }
+        .auth-logo { text-align: center; margin-bottom: 20px; }
+        .auth-logo img { height: 100px; width: auto; }
+        .auth-box h2 { text-align: center; margin-bottom: 30px; color: #333; }
+        .auth-input {
+            width: 100%;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            font-size: 15px;
+        }
+        .auth-input:focus { outline: none; border-color: #667eea; }
+        .auth-btn {
+            width: 100%;
+            padding: 12px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 12px;
+        }
+        .auth-btn:hover { background: #5568d3; }
+        .auth-toggle { text-align: center; color: #666; font-size: 14px; }
+        .auth-toggle span { color: #667eea; cursor: pointer; text-decoration: underline; }
+        .logout-btn {
+            padding: 8px 16px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .logout-btn:hover { background: #dc2626; }
+
+        .sidebar {
+            width: 280px;
+            background: #f9f9f9;
+            border-right: 1px solid #e5e5e5;
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+        }
+        .sidebar-logo {
+            text-align: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #e5e5e5;
+            margin-bottom: 12px;
+        }
+        .sidebar-logo img { height: 50px; width: auto; }
+        .user-info {
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .user-email {
+            font-size: 13px;
+            font-weight: 500;
+            color: #333;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .new-chat-btn {
+            background: white;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            padding: 12px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+            margin-bottom: 16px;
+        }
+        .new-chat-btn:hover { background: #f0f0f0; border-color: #667eea; }
+        .chat-history-header {
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+        .chat-history { flex: 1; overflow-y: auto; }
+        .chat-history-item {
+            padding: 10px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+        .chat-history-item:hover { background: #e8e8e8; }
+        .chat-history-item.active { background: #667eea; color: white; }
+        .chat-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .chat-delete-btn {
+            opacity: 0;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .chat-history-item:hover .chat-delete-btn { opacity: 1; }
+        .chat-delete-btn:hover { background: rgba(0,0,0,0.1); }
+        .chat-history-item.active .chat-delete-btn:hover { background: rgba(255,255,255,0.2); }
+
+        .main-content { flex: 1; display: flex; flex-direction: column; background: white; }
+        .header {
+            padding: 12px 20px;
+            border-bottom: 1px solid #e5e5e5;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: white;
+        }
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .header-logo { height: 35px; width: auto; border-radius: 6px; }
+        .model-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: #f0f0f0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .model-selector select {
+            background: transparent;
+            border: none;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            outline: none;
+            color: #333;
+        }
+
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .message {
+            display: flex;
+            gap: 16px;
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+            padding: 20px;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .message.user { background: transparent; }
+        .message.bot { background: #f9f9f9; border-radius: 12px; }
+        
+        /* Avatar Styles */
+        .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .user .avatar { 
+            background: #667eea; 
+        }
+        .bot .avatar { 
+            background: #10a37f; 
+        }
+        .avatar svg {
+            width: 20px;
+            height: 20px;
+            fill: white;
+        }
+        
+        .message-content { flex: 1; line-height: 1.6; font-size: 15px; }
+        .message-header { font-weight: 600; margin-bottom: 8px; font-size: 14px; color: #666; }
+        .message-text { color: #333; white-space: pre-wrap; word-wrap: break-word; }
+        .message-text h1, .message-text h2, .message-text h3,
+        .message-text h4, .message-text h5, .message-text h6 {
+            margin: 16px 0 8px 0; font-weight: 600; line-height: 1.3;
+        }
+        .message-text h1 { font-size: 24px; }
+        .message-text h2 { font-size: 20px; }
+        .message-text h3 { font-size: 18px; }
+        .message-text p { margin: 8px 0; }
+        .message-text ul, .message-text ol { margin: 8px 0; padding-left: 24px; }
+        .message-text li { margin: 4px 0; }
+        .message-text code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        .message-text pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 16px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 12px 0;
+        }
+        .message-text pre code { background: transparent; padding: 0; color: inherit; }
+        .message-text strong { font-weight: 600; }
+        .message-text em { font-style: italic; }
+        .message-text blockquote {
+            border-left: 4px solid #667eea;
+            padding-left: 16px;
+            margin: 12px 0;
+            color: #666;
+            font-style: italic;
+        }
+        .message-text img, .message-text video {
+            max-width: 100%;
+            border-radius: 12px;
+            margin: 10px 0;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .feedback-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e5e5e5;
+        }
+        .feedback-btn {
+            background: none;
+            border: 1px solid #e5e5e5;
+            border-radius: 6px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+            color: #666;
+        }
+        .feedback-btn:hover { background: #f0f0f0; border-color: #667eea; color: #667eea; }
+        .feedback-btn.liked { background: #10a37f; color: white; border-color: #10a37f; }
+        .feedback-btn.disliked { background: #ef4444; color: white; border-color: #ef4444; }
+
+        .input-area {
+            padding: 20px;
+            border-top: 1px solid #e5e5e5;
+            background: white;
+        }
+        .input-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .input-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: white;
+            border: 1px solid #e5e5e5;
+            border-radius: 12px;
+            padding: 12px 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            transition: box-shadow 0.2s;
+            position: relative;
+        }
+        .input-wrapper:focus-within {
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+            border-color: #667eea;
+        }
+        
+        .plus-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #f0f0f0;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: 300;
+            color: #667eea;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .plus-btn:hover {
+            background: #667eea;
+            color: white;
+            transform: rotate(90deg);
+        }
+        
+        #user-input {
+            flex: 1;
+            border: none;
+            outline: none;
+            font-size: 15px;
+            font-family: inherit;
+            line-height: 1.5;
+        }
+        #send-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        #send-btn:hover:not(:disabled) { background: #5568d3; }
+        #send-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+        .plus-menu {
+            position: absolute;
+            bottom: 60px;
+            left: 16px;
+            background: white;
+            border: 1px solid #e5e5e5;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+            padding: 8px;
+            min-width: 240px;
+            display: none;
+            z-index: 100;
+            animation: slideUp 0.2s ease;
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .plus-menu.show { display: block; }
+        .plus-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 14px;
+            color: #333;
+        }
+        .plus-menu-item:hover { background: #f0f0f0; }
+        .plus-menu-item .icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+        .plus-menu-item .icon.image { background: #e3f2fd; }
+        .plus-menu-item .icon.video { background: #f3e5f5; }
+        .plus-menu-item .icon.audio { background: #fff3e0; }
+        .plus-menu-item .icon.file { background: #e8f5e9; }
+        .plus-menu-item .text { flex: 1; }
+        .plus-menu-item .title { font-weight: 500; }
+        .plus-menu-item .desc { font-size: 11px; color: #666; }
+        .plus-menu-divider {
+            height: 1px;
+            background: #e5e5e5;
+            margin: 4px 0;
+        }
+
+        .thinking-indicator {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: center;
+            padding: 10px 0;
+        }
+        .thinking-dots { display: flex; gap: 4px; }
+        .thinking-dot {
+            width: 8px;
+            height: 8px;
+            background: #999;
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out;
+        }
+        .thinking-dot:nth-child(1) { animation-delay: -0.32s; }
+        .thinking-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+        .thinking-text { font-size: 12px; color: #666; }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
+        .welcome-message {
+            text-align: center;
+            padding: 60px 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .welcome-logo { height: 120px; width: auto; margin-bottom: 20px; }
+        .welcome-message h1 { font-size: 32px; margin-bottom: 16px; color: #333; }
+        .welcome-message p { font-size: 16px; color: #666; line-height: 1.6; }
+        .feature-tags {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        .feature-tag {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        
+        .media-container { position: relative; margin: 10px 0; }
+        .download-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.2s;
+        }
+        .download-btn:hover { background: #5568d3; }
+        .download-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .attachment-preview {
+            display: flex;
+            gap: 12px;
+            padding: 12px 16px;
+            flex-wrap: wrap;
+            background: #f9f9f9;
+            border-radius: 8px;
+            margin-top: 8px;
+        }
+        .attachment-item {
+            background: white;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            max-width: 200px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .attachment-item img, .attachment-item video, .attachment-item audio {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 6px;
+        }
+        .attachment-item .file-info {
+            flex: 1;
+            overflow: hidden;
+        }
+        .attachment-item .filename {
+            font-size: 12px;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .attachment-item .filesize {
+            font-size: 11px;
+            color: #666;
+        }
+        .attachment-remove {
+            cursor: pointer;
+            color: #999;
+            font-size: 18px;
+            padding: 4px;
+            line-height: 1;
+        }
+        .attachment-remove:hover { color: #ef4444; }
+    </style>
+</head>
+<body>
+    <!-- Auth Screen -->
+    <div class="auth-screen" id="auth-screen">
+        <div class="auth-box">
+            <div class="auth-logo">
+                <img src="/static/logo.png" alt="HD AI Logo">
+            </div>
+            <h2 id="auth-title">Welcome to HD AI Chat</h2>
+            
+            <div id="login-form">
+                <input type="email" id="login-email" class="auth-input" placeholder="Email address">
+                <input type="password" id="login-password" class="auth-input" placeholder="Password">
+                <button class="auth-btn" id="login-btn">Login</button>
+                <div class="auth-toggle">
+                    Don't have an account? <span id="to-signup">Sign up</span>
+                </div>
+            </div>
+            
+            <div id="signup-form" style="display: none;">
+                <input type="email" id="signup-email" class="auth-input" placeholder="Email address">
+                <input type="password" id="signup-password" class="auth-input" placeholder="Password (min 6 characters)">
+                <button class="auth-btn" id="signup-btn">Sign Up</button>
+                <div class="auth-toggle">
+                    Already have an account? <span id="to-login">Login</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar" style="display: none;">
+        <div class="sidebar-logo">
+            <img src="/static/logo.png" alt="HD AI Logo">
+        </div>
+        
+        <div class="user-info">
+            <span class="user-email" id="user-email">user@example.com</span>
+            <button class="logout-btn" id="logout-btn">Logout</button>
+        </div>
+        
+        <button class="new-chat-btn" id="new-chat-btn">
+            <span>+</span>
+            <span>New Chat</span>
+        </button>
+        
+        <div class="chat-history-header">Recent Chats</div>
+        <div class="chat-history" id="chat-history"></div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content" id="main-content" style="display: none;">
+        <div class="header">
+            <div class="header-left">
+                <img src="/static/logo.png" alt="HD AI Logo" class="header-logo">
+                <div class="model-selector">
+                    <select id="model-select">
+                        {% for key, info in models.items() %}
+                        <option value="{{ key }}" {% if key == default_model %}selected{% endif %}>
+                            {{ info.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div style="font-size: 14px; color: #666; font-weight: 500;">HD AI Chat</div>
+        </div>
+
+        <div class="chat-container" id="chat-box">
+            <div class="welcome-message">
+                <img src="/static/logo.png" alt="HD AI Logo" class="welcome-logo">
+                <h1>Welcome to HD AI Chat</h1>
+                <p>Select a model from the dropdown above and start chatting! I'm here to help you with anything.</p>
+                <div class="feature-tags">
+                    <span class="feature-tag">💬 Chat</span>
+                    <span class="feature-tag">️ Images</span>
+                    <span class="feature-tag">🎥 Videos</span>
+                    <span class="feature-tag">🎵 Audio</span>
+                    <span class="feature-tag"> Files</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="input-area">
+            <div class="input-container">
+                <div class="input-wrapper">
+                    <button class="plus-btn" id="plus-btn" title="Add attachment">+</button>
+                    
+                    <div class="plus-menu" id="plus-menu">
+                        <div class="plus-menu-item" onclick="triggerUpload('image')">
+                            <div class="icon image">🖼️</div>
+                            <div class="text">
+                                <div class="title">Upload Image</div>
+                                <div class="desc">PNG, JPG, GIF, WEBP</div>
+                            </div>
+                        </div>
+                        <div class="plus-menu-item" onclick="triggerUpload('video')">
+                            <div class="icon video">🎥</div>
+                            <div class="text">
+                                <div class="title">Upload Video</div>
+                                <div class="desc">MP4, AVI, MOV, WEBM</div>
+                            </div>
+                        </div>
+                        <div class="plus-menu-item" onclick="triggerUpload('audio')">
+                            <div class="icon audio">🎵</div>
+                            <div class="text">
+                                <div class="title">Upload Audio</div>
+                                <div class="desc">MP3, WAV, OGG, M4A</div>
+                            </div>
+                        </div>
+                        <div class="plus-menu-item" onclick="triggerUpload('document')">
+                            <div class="icon file">📄</div>
+                            <div class="text">
+                                <div class="title">Upload Document</div>
+                                <div class="desc">PDF, TXT, DOC, DOCX</div>
+                            </div>
+                        </div>
+                        <div class="plus-menu-divider"></div>
+                        <div class="plus-menu-item" onclick="quickGenerate('image')">
+                            <div class="icon image">🎨</div>
+                            <div class="text">
+                                <div class="title">Generate Image</div>
+                                <div class="desc">AI se image banayein</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <input type="text" id="user-input" placeholder="Message HD AI Chat..." autocomplete="off">
+                    <button id="send-btn" disabled>Send</button>
+                </div>
+                
+                <div class="attachment-preview" id="attachment-preview"></div>
+                
+                <div style="text-align: center; margin-top: 12px; font-size: 12px; color: #999;">
+                    HD AI Chat can make mistakes. Consider checking important information.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="file-upload-image" accept="image/*" multiple style="display: none;">
+    <input type="file" id="file-upload-video" accept="video/*" multiple style="display: none;">
+    <input type="file" id="file-upload-audio" accept="audio/*" multiple style="display: none;">
+    <input type="file" id="file-upload-document" accept=".pdf,.txt,.doc,.docx" multiple style="display: none;">
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBypeCaa7V2_iXLkk6m4V397akRRRYZCLM",
+            authDomain: "hd-ai-e46cc.firebaseapp.com",
+            projectId: "hd-ai-e46cc",
+            storageBucket: "hd-ai-e46cc.firebasestorage.app",
+            messagingSenderId: "758506773632",
+            appId: "1:758506773632:web:a82f21af8c87b7e2341a65"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        let currentUser = null;
+        let currentChatId = null;
+        let chats = {};
+        let isProcessing = false;
+        let attachments = [];
+
+        marked.setOptions({ breaks: true, gfm: true });
+
+        const authScreen = document.getElementById('auth-screen');
+        const sidebar = document.getElementById('sidebar');
+        const mainContent = document.getElementById('main-content');
+        const userEmail = document.getElementById('user-email');
+        const chatBox = document.getElementById('chat-box');
+        const chatHistory = document.getElementById('chat-history');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const modelSelect = document.getElementById('model-select');
+        const plusBtn = document.getElementById('plus-btn');
+        const plusMenu = document.getElementById('plus-menu');
+        const attachmentPreview = document.getElementById('attachment-preview');
+
+        // SVG Icons
+        const userIcon = `<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>`;
+        const botIcon = `<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5A2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5a2.5 2.5 0 0 0 2.5 2.5a2.5 2.5 0 0 0 2.5-2.5a2.5 2.5 0 0 0-2.5-2.5"/></svg>`;
+
+        // Download Function
+        async function downloadImage(url, filename) {
+            try {
+                const btn = event.target.closest('.download-btn');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerText = ' Downloading...';
+                }
+                
+                const response = await fetch(url);
+                const blob = await response.blob();
+                const blobUrl = window.URL.createObjectURL(blob);
+                
+                const link = document.createElement('a');
+                link.href = blobUrl;
+                link.download = filename || 'ai-image.png';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(blobUrl);
+                
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerText = '✅ Downloaded!';
+                    setTimeout(() => { btn.innerHTML = '⬇️ Download Image'; }, 2000);
+                }
+            } catch (error) {
+                console.error('Download error:', error);
+                window.open(url, '_blank');
+            }
+        }
+
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                currentUser = user;
+                authScreen.style.display = 'none';
+                sidebar.style.display = 'flex';
+                mainContent.style.display = 'flex';
+                userEmail.textContent = user.email;
+                loadChats();
+            } else {
+                currentUser = null;
+                authScreen.style.display = 'flex';
+                sidebar.style.display = 'none';
+                mainContent.style.display = 'none';
+            }
+        });
+
+        function toggleAuthMode() {
+            authMode = authMode === 'login' ? 'signup' : 'login';
+            if (authMode === 'login') {
+                document.getElementById('login-form').style.display = 'block';
+                document.getElementById('signup-form').style.display = 'none';
+                document.getElementById('auth-title').textContent = 'Welcome to HD AI Chat';
+            } else {
+                document.getElementById('login-form').style.display = 'none';
+                document.getElementById('signup-form').style.display = 'block';
+                document.getElementById('auth-title').textContent = 'Create Account';
+            }
+        }
+
+        async function login() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            if (!email || !password) { alert('Please enter email and password'); return; }
+            try { await auth.signInWithEmailAndPassword(email, password); }
+            catch (error) { alert('Login failed: ' + error.message); }
+        }
+
+        async function signup() {
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+            if (!email || !password) { alert('Please enter email and password'); return; }
+            if (password.length < 6) { alert('Password must be at least 6 characters'); return; }
+            try { await auth.createUserWithEmailAndPassword(email, password); }
+            catch (error) { alert('Sign up failed: ' + error.message); }
+        }
+
+        function logout() { auth.signOut(); }
+
+        document.getElementById('login-btn').addEventListener('click', login);
+        document.getElementById('signup-btn').addEventListener('click', signup);
+        document.getElementById('to-signup').addEventListener('click', toggleAuthMode);
+        document.getElementById('to-login').addEventListener('click', toggleAuthMode);
+        document.getElementById('logout-btn').addEventListener('click', logout);
+        document.getElementById('new-chat-btn').addEventListener('click', createNewChat);
+
+        document.getElementById('login-password').addEventListener('keypress', (e) => { if (e.key === 'Enter') login(); });
+        document.getElementById('signup-password').addEventListener('keypress', (e) => { if (e.key === 'Enter') signup(); });
+
+        plusBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            plusMenu.classList.toggle('show');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!plusMenu.contains(e.target) && e.target !== plusBtn) {
+                plusMenu.classList.remove('show');
+            }
+        });
+
+        function triggerUpload(type) {
+            plusMenu.classList.remove('show');
+            const fileInputs = {
+                'image': document.getElementById('file-upload-image'),
+                'video': document.getElementById('file-upload-video'),
+                'audio': document.getElementById('file-upload-audio'),
+                'document': document.getElementById('file-upload-document')
+            };
+            if (fileInputs[type]) {
+                fileInputs[type].click();
+            }
+        }
+
+        function quickGenerate(type) {
+            plusMenu.classList.remove('show');
+            if (type === 'image') {
+                userInput.value = 'Create an image of ';
+                userInput.focus();
+                sendBtn.disabled = false;
+            }
+        }
+
+        ['image', 'video', 'audio', 'document'].forEach(type => {
+            const input = document.getElementById(`file-upload-${type}`);
+            if (input) {
+                input.addEventListener('change', async (e) => {
+                    const files = Array.from(e.target.files);
+                    for (const file of files) {
+                        await handleFileUpload(file, type);
+                    }
+                });
+            }
+        });
+
+        async function handleFileUpload(file, type) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('type', type);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    attachments.push({
+                        url: data.url,
+                        filename: data.filename,
+                        type: data.type,
+                        size: data.size_mb
+                    });
+                    renderAttachments();
+                    updateSendButton();
+                } else {
+                    alert('Upload failed: ' + data.error);
+                }
+            } catch (error) {
+                alert('Upload error: ' + error.message);
+            }
+        }
+
+        function renderAttachments() {
+            attachmentPreview.innerHTML = '';
+            attachments.forEach((att, index) => {
+                const div = document.createElement('div');
+                div.className = 'attachment-item';
+                
+                let mediaHtml = '';
+                if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(att.type)) {
+                    mediaHtml = `<img src="${att.url}" alt="${att.filename}">`;
+                } else if (['mp4', 'avi', 'mov', 'webm', 'mkv'].includes(att.type)) {
+                    mediaHtml = `<video src="${att.url}"></video>`;
+                } else if (['mp3', 'wav', 'ogg', 'm4a'].includes(att.type)) {
+                    mediaHtml = `<audio src="${att.url}" controls></audio>`;
+                } else {
+                    mediaHtml = `<div style="width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; background: #f0f0f0; border-radius: 6px; font-size: 24px;">📄</div>`;
+                }
+                
+                div.innerHTML = `
+                    ${mediaHtml}
+                    <div class="file-info">
+                        <div class="filename">${att.filename}</div>
+                        <div class="filesize">${att.size} MB</div>
+                    </div>
+                    <span class="attachment-remove" onclick="removeAttachment(${index})">✕</span>
+                `;
+                
+                attachmentPreview.appendChild(div);
+            });
+        }
+
+        function removeAttachment(index) {
+            attachments.splice(index, 1);
+            renderAttachments();
+            updateSendButton();
+        }
+
+        function updateSendButton() {
+            if ((userInput.value.trim().length > 0 || attachments.length > 0) && !isProcessing) {
+                sendBtn.disabled = false;
+            } else {
+                sendBtn.disabled = true;
+            }
+        }
+
+        userInput.addEventListener('input', updateSendButton);
+
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !isProcessing && (userInput.value.trim() || attachments.length > 0)) {
+                sendMessage();
+            }
+        });
+
+        sendBtn.addEventListener('click', () => {
+            if (!isProcessing && (userInput.value.trim() || attachments.length > 0)) {
+                sendMessage();
+            }
+        });
+
+        function generateChatId() {
+            return 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        async function createNewChat() {
+            if (!currentUser) return;
+            const chatId = generateChatId();
+            const chatData = {
+                id: chatId,
+                title: 'New Chat',
+                messages: [],
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                model: modelSelect.value,
+                userId: currentUser.uid
+            };
+            await db.collection('chats').doc(chatId).set(chatData);
+            currentChatId = chatId;
+            loadChat(chatData);
+            renderChatHistory();
+        }
+
+        async function loadChats() {
+            if (!currentUser) return;
+            const snapshot = await db.collection('chats')
+                .where('userId', '==', currentUser.uid)
+                .orderBy('createdAt', 'desc')
+                .get();
+            chats = {};
+            snapshot.forEach((doc) => { chats[doc.id] = doc.data(); });
+            if (Object.keys(chats).length === 0) { createNewChat(); }
+            else { loadChat(Object.values(chats)[0]); }
+            renderChatHistory();
+        }
+
+        function loadChat(chat) {
+            currentChatId = chat.id;
+            if (!chat.messages || chat.messages.length === 0) {
+                chatBox.innerHTML = `
+                    <div class="welcome-message">
+                        <img src="/static/logo.png" alt="HD AI Logo" class="welcome-logo">
+                        <h1>Welcome to HD AI Chat</h1>
+                        <p>Select a model from the dropdown above and start chatting! I'm here to help you with anything.</p>
+                        <div class="feature-tags">
+                            <span class="feature-tag">💬 Chat</span>
+                            <span class="feature-tag">🖼️ Images</span>
+                            <span class="feature-tag">🎥 Videos</span>
+                            <span class="feature-tag">🎵 Audio</span>
+                            <span class="feature-tag">📄 Files</span>
+                        </div>
+                    </div>`;
+            } else {
+                chatBox.innerHTML = '';
+                chat.messages.forEach(msg => {
+                    if (msg.role === 'user') {
+                        appendUserMessage(msg.content, msg.attachments);
+                    } else if (msg.type === 'image') {
+                        appendBotMessageWithImage(msg.image_url, msg.model, msg.id);
+                    } else {
+                        appendBotMessage(msg.content, msg.model, msg.id);
+                    }
+                });
+            }
+            modelSelect.value = chat.model || modelSelect.value;
+            renderChatHistory();
+        }
+
+        async function deleteChat(chatId, event) {
+            event.stopPropagation();
+            if (Object.keys(chats).length === 1) { alert('You must have at least one chat!'); return; }
+            if (confirm('Delete this chat?')) {
+                await db.collection('chats').doc(chatId).delete();
+                delete chats[chatId];
+                if (currentChatId === chatId) {
+                    const remaining = Object.values(chats);
+                    if (remaining.length > 0) loadChat(remaining[0]);
+                    else createNewChat();
+                }
+                renderChatHistory();
+            }
+        }
+
+        function renderChatHistory() {
+            chatHistory.innerHTML = '';
+            const sorted = Object.values(chats).sort((a, b) => 
+                (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)
+            );
+            sorted.forEach(chat => {
+                const item = document.createElement('div');
+                item.className = 'chat-history-item' + (chat.id === currentChatId ? ' active' : '');
+                item.onclick = () => loadChat(chat);
+                item.innerHTML = `
+                    <span class="chat-title">${escapeHtml(chat.title)}</span>
+                    <button class="chat-delete-btn" title="Delete">🗑️</button>`;
+                item.querySelector('.chat-delete-btn').addEventListener('click', (e) => deleteChat(chat.id, e));
+                chatHistory.appendChild(item);
+            });
+        }
+
+        async function updateChatTitle(chatId, firstMessage) {
+            if (!currentUser) return;
+            const title = firstMessage.length > 30 ? firstMessage.substring(0, 30) + '...' : firstMessage;
+            await db.collection('chats').doc(chatId).update({ title: title });
+            chats[chatId].title = title;
+            renderChatHistory();
+        }
+
+        async function saveChatMessages() {
+            if (!currentUser || !currentChatId) return;
+            const chat = chats[currentChatId];
+            if (chat) {
+                await db.collection('chats').doc(currentChatId).update({
+                    messages: chat.messages,
+                    model: modelSelect.value
+                });
+            }
+        }
+
+        async function sendMessage() {
+            const message = userInput.value.trim();
+            const selectedModel = modelSelect.value;
+            const selectedModelName = modelSelect.options[modelSelect.selectedIndex].text;
+            
+            if ((!message && attachments.length === 0) || isProcessing || !currentUser) return;
+
+            if (!currentChatId || !chats[currentChatId]) {
+                await createNewChat();
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
+            const chat = chats[currentChatId];
+            if (!chat) { alert('Chat not found. Please try again.'); return; }
+
+            const isFirstMessage = !chat.messages || chat.messages.length === 0;
+            const lowerMessage = message.toLowerCase();
+            const imageKeywords = ['image', 'picture', 'photo', 'draw', 'create image', 'generate image', 'tasveer', 'painting', 'art'];
+            const isImageRequest = imageKeywords.some(keyword => lowerMessage.includes(keyword));
+
+            try {
+                isProcessing = true;
+                sendBtn.disabled = true;
+                sendBtn.innerText = '...';
+
+                appendUserMessage(message, [...attachments]);
+                if (!chat.messages) chat.messages = [];
+                chat.messages.push({
+                    role: 'user',
+                    content: message,
+                    attachments: [...attachments],
+                    timestamp: new Date().toISOString()
+                });
+
+                userInput.value = '';
+                const currentAttachments = [...attachments];
+                attachments = [];
+                renderAttachments();
+                updateSendButton();
+
+                const messageId = 'msg_' + Date.now();
+                const thinkingText = isImageRequest ? 'Generating image...' : 'Thinking...';
+                const botMessageDiv = appendBotMessageWithThinking(selectedModelName, messageId, thinkingText);
+
+                if (isImageRequest) {
+                    try {
+                        const imageResponse = await fetch('/generate-image', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ prompt: message })
+                        });
+                        const imageData = await imageResponse.json();
+                        
+                        if (imageData.success) {
+                            updateBotMessageWithImage(botMessageDiv, imageData.image_url, imageData.prompt, selectedModelName, messageId);
+                            chat.messages.push({
+                                role: 'assistant',
+                                content: `Image generated: ${imageData.prompt}`,
+                                image_url: imageData.image_url,
+                                model: selectedModelName,
+                                id: messageId,
+                                timestamp: new Date().toISOString(),
+                                feedback: null,
+                                type: 'image'
+                            });
+                        } else {
+                            updateBotMessage(botMessageDiv, 'Image generate nahi ho saki.', selectedModelName, messageId);
+                        }
+                    } catch (imgError) {
+                        console.error('Image error:', imgError);
+                        updateBotMessage(botMessageDiv, 'Image generation failed.', selectedModelName, messageId);
+                    }
+                } else {
+                    const response = await fetch('/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: message, model: selectedModel })
+                    });
+                    const data = await response.json();
+                    const botResponse = data.response || data.error || 'No response';
+                    
+                    updateBotMessage(botMessageDiv, botResponse, selectedModelName, messageId);
+                    chat.messages.push({
+                        role: 'assistant',
+                        content: botResponse,
+                        model: selectedModelName,
+                        id: messageId,
+                        timestamp: new Date().toISOString(),
+                        feedback: null,
+                        type: 'text'
+                    });
+                }
+
+                if (isFirstMessage) { updateChatTitle(currentChatId, message); }
+                await saveChatMessages();
+
+            } catch (error) {
+                console.error('Error:', error);
+                const lastBot = chatBox.querySelector('.message.bot:last-child');
+                if (lastBot) {
+                    updateBotMessage(lastBot, 'Server se connect nahi ho saka.', 'Error', 'msg_' + Date.now());
+                }
+            } finally {
+                isProcessing = false;
+                sendBtn.disabled = true;
+                sendBtn.innerText = 'Send';
+                userInput.focus();
+            }
+        }
+
+        function appendUserMessage(text, attachments = []) {
+            const welcome = chatBox.querySelector('.welcome-message');
+            if (welcome) welcome.remove();
+
+            const div = document.createElement('div');
+            div.className = 'message user';
+            
+            let attachmentsHtml = '';
+            if (attachments.length > 0) {
+                attachmentsHtml = '<div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">';
+                attachments.forEach(att => {
+                    const ext = att.filename.split('.').pop().toLowerCase();
+                    if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
+                        attachmentsHtml += `<img src="${att.url}" style="max-width: 100px; max-height: 100px; border-radius: 8px; object-fit: cover;">`;
+                    } else if (['mp4', 'avi', 'mov', 'webm', 'mkv'].includes(ext)) {
+                        attachmentsHtml += `<video src="${att.url}" controls style="max-width: 200px; max-height: 100px; border-radius: 8px;"></video>`;
+                    } else if (['mp3', 'wav', 'ogg', 'm4a'].includes(ext)) {
+                        attachmentsHtml += `<audio src="${att.url}" controls style="max-width: 200px; border-radius: 8px;"></audio>`;
+                    } else {
+                        attachmentsHtml += `<span style="background: rgba(255,255,255,0.2); padding: 4px 8px; border-radius: 6px; font-size: 12px;">📄 ${att.filename}</span>`;
+                    }
+                });
+                attachmentsHtml += '</div>';
+            }
+            
+            div.innerHTML = `
+                <div class="avatar">${userIcon}</div>
+                <div class="message-content">
+                    <div class="message-text">${escapeHtml(text)}</div>
+                    ${attachmentsHtml}
+                </div>`;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function appendBotMessageWithThinking(modelName, messageId, thinkingText = 'Thinking...') {
+            const welcome = chatBox.querySelector('.welcome-message');
+            if (welcome) welcome.remove();
+
+            const div = document.createElement('div');
+            div.className = 'message bot';
+            div.id = 'msg-div-' + messageId;
+            div.innerHTML = `
+                <div class="avatar">${botIcon}</div>
+                <div class="message-content">
+                    <div class="message-header">${escapeHtml(modelName)}</div>
+                    <div class="thinking-indicator">
+                        <div class="thinking-dots">
+                            <div class="thinking-dot"></div>
+                            <div class="thinking-dot"></div>
+                            <div class="thinking-dot"></div>
+                        </div>
+                        <div class="thinking-text">${thinkingText}</div>
+                    </div>
+                </div>`;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            return div;
+        }
+
+        function appendBotMessage(text, modelName, messageId) {
+            const welcome = chatBox.querySelector('.welcome-message');
+            if (welcome) welcome.remove();
+
+            const div = document.createElement('div');
+            div.className = 'message bot';
+            div.id = 'msg-div-' + messageId;
+            div.innerHTML = `
+                <div class="avatar">${botIcon}</div>
+                <div class="message-content">
+                    <div class="message-header">${escapeHtml(modelName)}</div>
+                    <div class="message-text">${marked.parse(text)}</div>
+                    <div class="feedback-buttons">
+                        <button class="feedback-btn" data-action="like">👍 Helpful</button>
+                        <button class="feedback-btn" data-action="dislike">👎 Not helpful</button>
+                    </div>
+                </div>`;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            
+            div.querySelectorAll('.feedback-btn').forEach(btn => {
+                btn.addEventListener('click', () => giveFeedback(messageId, btn.dataset.action, btn));
+            });
+        }
+
+        function appendBotMessageWithImage(imageUrl, modelName, messageId) {
+            const welcome = chatBox.querySelector('.welcome-message');
+            if (welcome) welcome.remove();
+
+            const div = document.createElement('div');
+            div.className = 'message bot';
+            div.id = 'msg-div-' + messageId;
+            div.innerHTML = `
+                <div class="avatar">${botIcon}</div>
+                <div class="message-content">
+                    <div class="message-header">${escapeHtml(modelName)}</div>
+                    <div class="message-text">
+                        <div class="media-container">
+                            <img src="${imageUrl}" alt="Generated Image" 
+                                 style="max-width: 100%; border-radius: 12px; margin: 10px 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"
+                                 onerror="this.src='https://via.placeholder.com/400x400?text=Image+Loading...'">
+                        </div>
+                        <button onclick="downloadImage('${imageUrl}', 'ai-image-${Date.now()}.png')" 
+                                class="download-btn">️ Download Image</button>
+                    </div>
+                    <div class="feedback-buttons">
+                        <button class="feedback-btn" data-action="like">👍 Helpful</button>
+                        <button class="feedback-btn" data-action="dislike"> Not helpful</button>
+                    </div>
+                </div>`;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            
+            div.querySelectorAll('.feedback-btn').forEach(btn => {
+                btn.addEventListener('click', () => giveFeedback(messageId, btn.dataset.action, btn));
+            });
+        }
+
+        function updateBotMessage(messageDiv, text, modelName, messageId) {
+            const content = messageDiv.querySelector('.message-content');
+            content.innerHTML = `
+                <div class="message-header">${escapeHtml(modelName)}</div>
+                <div class="message-text">${marked.parse(text)}</div>
+                <div class="feedback-buttons">
+                    <button class="feedback-btn" data-action="like">👍 Helpful</button>
+                    <button class="feedback-btn" data-action="dislike">👎 Not helpful</button>
+                </div>`;
+            
+            messageDiv.querySelectorAll('.feedback-btn').forEach(btn => {
+                btn.addEventListener('click', () => giveFeedback(messageId, btn.dataset.action, btn));
+            });
+        }
+
+        function updateBotMessageWithImage(messageDiv, imageUrl, prompt, modelName, messageId) {
+            const content = messageDiv.querySelector('.message-content');
+            content.innerHTML = `
+                <div class="message-header">${escapeHtml(modelName)}</div>
+                <div class="message-text">
+                    <p style="margin-bottom: 10px;">Here's your image for: "${escapeHtml(prompt)}"</p>
+                    <div class="media-container">
+                        <img src="${imageUrl}" alt="Generated Image" 
+                             style="max-width: 100%; border-radius: 12px; margin: 10px 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"
+                             onerror="this.src='https://via.placeholder.com/400x400?text=Image+Loading...'">
+                    </div>
+                    <button onclick="downloadImage('${imageUrl}', 'ai-image-${Date.now()}.png')" 
+                            class="download-btn">️ Download Image</button>
+                </div>
+                <div class="feedback-buttons">
+                    <button class="feedback-btn" data-action="like">👍 Helpful</button>
+                    <button class="feedback-btn" data-action="dislike"> Not helpful</button>
+                </div>`;
+            
+            messageDiv.querySelectorAll('.feedback-btn').forEach(btn => {
+                btn.addEventListener('click', () => giveFeedback(messageId, btn.dataset.action, btn));
+            });
+        }
+
+        async function giveFeedback(messageId, type, btnElement) {
+            if (!currentUser || !currentChatId) return;
+            const chat = chats[currentChatId];
+            const message = chat.messages.find(m => m.id === messageId);
+            if (!message) return;
+
+            const buttons = btnElement.parentElement.querySelectorAll('.feedback-btn');
+            buttons.forEach(btn => btn.classList.remove('liked', 'disliked'));
+
+            if (message.feedback === type) {
+                message.feedback = null;
+            } else {
+                message.feedback = type;
+                btnElement.classList.add(type === 'like' ? 'liked' : 'disliked');
+            }
+            await saveChatMessages();
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

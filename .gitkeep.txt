@@ -1,0 +1,16 @@
+hd-ai-chatbot/
+│
+├── app.py                    # Main Flask app (upar wala code)
+├── requirements.txt          # Dependencies
+├── Procfile                  # Render ke liye
+├── runtime.txt              # Python version
+├── .env                     # Environment variables (LOCAL)
+├── .gitignore               # Git ignore file
+│
+├── templates/
+│   └── index.html           # Frontend HTML
+│
+└── static/
+    ├── logo.png             # Your logo
+    └── uploads/             # Uploaded files
+        └── .gitkeep         # Keep this folder in git
